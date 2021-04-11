@@ -71,6 +71,14 @@ bool OSHasAVXSupport() {
 
 }  // namespace
 
+bool CpuFeatures::SupportsWasmSimd128() {
+#if V8_ENABLE_WEBASSEMBLY
+  if (IsSupported(SSE4_1)) return true;
+  if (FLAG_wasm_simd_ssse3_codegen && IsSupported(SSSE3)) return true;
+#endif  // V8_ENABLE_WEBASSEMBLY
+  return false;
+}
+
 void CpuFeatures::ProbeImpl(bool cross_compile) {
   base::CPU cpu;
   CHECK(cpu.has_sse2());  // SSE2 support is mandatory.
@@ -1194,16 +1202,6 @@ void Assembler::cpuid() {
   emit(0xA2);
 }
 
-void Assembler::prefetch(Operand src, int level) {
-  DCHECK(is_uint2(level));
-  EnsureSpace ensure_space(this);
-  emit(0x0F);
-  emit(0x18);
-  // Emit hint number in Reg position of RegR/M.
-  XMMRegister code = XMMRegister::from_code(level);
-  emit_sse_operand(code, src);
-}
-
 void Assembler::cqo() {
   EnsureSpace ensure_space(this);
   emit_rex_64();
@@ -1437,6 +1435,14 @@ void Assembler::j(Condition cc, Handle<Code> target, RelocInfo::Mode rmode) {
   RecordRelocInfo(rmode);
   int code_target_index = AddCodeTarget(target);
   emitl(code_target_index);
+}
+
+void Assembler::jmp(Address entry, RelocInfo::Mode rmode) {
+  DCHECK(RelocInfo::IsRuntimeEntry(rmode));
+  EnsureSpace ensure_space(this);
+  // 1110 1001 #32-bit disp.
+  emit(0xE9);
+  emit_runtime_entry(entry, rmode);
 }
 
 void Assembler::jmp_rel(int32_t offset) {

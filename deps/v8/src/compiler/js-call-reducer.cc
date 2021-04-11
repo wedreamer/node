@@ -1479,12 +1479,12 @@ struct MapFrameStateParams {
   TNode<Object> receiver;
   TNode<Object> callback;
   TNode<Object> this_arg;
-  TNode<JSArray> a;
+  base::Optional<TNode<JSArray>> a;
   TNode<Object> original_length;
 };
 
 FrameState MapPreLoopLazyFrameState(const MapFrameStateParams& params) {
-  DCHECK(params.a.is_null());
+  DCHECK(!params.a);
   Node* checkpoint_params[] = {params.receiver, params.callback,
                                params.this_arg, params.original_length};
   return CreateJavaScriptBuiltinContinuationFrameState(
@@ -1497,7 +1497,7 @@ FrameState MapPreLoopLazyFrameState(const MapFrameStateParams& params) {
 FrameState MapLoopLazyFrameState(const MapFrameStateParams& params,
                                  TNode<Number> k) {
   Node* checkpoint_params[] = {
-      params.receiver,       params.callback, params.this_arg, params.a, k,
+      params.receiver,       params.callback, params.this_arg, *params.a, k,
       params.original_length};
   return CreateJavaScriptBuiltinContinuationFrameState(
       params.jsgraph, params.shared,
@@ -1509,7 +1509,7 @@ FrameState MapLoopLazyFrameState(const MapFrameStateParams& params,
 FrameState MapLoopEagerFrameState(const MapFrameStateParams& params,
                                   TNode<Number> k) {
   Node* checkpoint_params[] = {
-      params.receiver,       params.callback, params.this_arg, params.a, k,
+      params.receiver,       params.callback, params.this_arg, *params.a, k,
       params.original_length};
   return CreateJavaScriptBuiltinContinuationFrameState(
       params.jsgraph, params.shared,
@@ -3429,8 +3429,9 @@ Reduction JSCallReducer::ReduceArraySome(Node* node,
   return ReplaceWithSubgraph(&a, subgraph);
 }
 
-namespace {
+#if V8_ENABLE_WEBASSEMBLY
 
+namespace {
 bool CanInlineJSToWasmCall(const wasm::FunctionSig* wasm_signature) {
   DCHECK(FLAG_turbo_inline_js_wasm_calls);
   if (wasm_signature->return_count() > 1) {
@@ -3449,7 +3450,6 @@ bool CanInlineJSToWasmCall(const wasm::FunctionSig* wasm_signature) {
 
   return true;
 }
-
 }  // namespace
 
 Reduction JSCallReducer::ReduceCallWasmFunction(
@@ -3459,11 +3459,6 @@ Reduction JSCallReducer::ReduceCallWasmFunction(
 
   // Avoid deoptimization loops
   if (p.speculation_mode() == SpeculationMode::kDisallowSpeculation) {
-    return NoChange();
-  }
-
-  // TODO(paolosev@microsoft.com): Enable inlining for calls in try/catch.
-  if (NodeProperties::IsExceptionalCall(node)) {
     return NoChange();
   }
 
@@ -3505,6 +3500,7 @@ Reduction JSCallReducer::ReduceCallWasmFunction(
   NodeProperties::ChangeOp(node, op);
   return Changed(node);
 }
+#endif  // V8_ENABLE_WEBASSEMBLY
 
 #ifndef V8_ENABLE_FP_PARAMS_IN_C_LINKAGE
 namespace {
@@ -4630,9 +4626,11 @@ Reduction JSCallReducer::ReduceJSCall(Node* node,
     return ReduceCallApiFunction(node, shared);
   }
 
+#if V8_ENABLE_WEBASSEMBLY
   if ((flags() & kInlineJSToWasmCalls) && shared.wasm_function_signature()) {
     return ReduceCallWasmFunction(node, shared);
   }
+#endif  // V8_ENABLE_WEBASSEMBLY
 
   return NoChange();
 }
@@ -4907,6 +4905,14 @@ Reduction JSCallReducer::ReduceStringPrototypeIndexOf(Node* node) {
       Node* position = n.Argument(1);
       new_position = effect = graph()->NewNode(
           simplified()->CheckSmi(p.feedback()), position, effect, control);
+
+      Node* receiver_length =
+          graph()->NewNode(simplified()->StringLength(), new_receiver);
+      new_position = graph()->NewNode(
+          simplified()->NumberMin(),
+          graph()->NewNode(simplified()->NumberMax(), new_position,
+                           jsgraph()->ZeroConstant()),
+          receiver_length);
     }
 
     NodeProperties::ReplaceEffectInput(node, effect);
@@ -7688,7 +7694,7 @@ Reduction JSCallReducer::ReduceRegExpPrototypeTest(Node* node) {
   if (ai_exec.IsInvalid()) return inference.NoChange();
 
   // If "exec" has been modified on {regexp}, we can't do anything.
-  if (ai_exec.IsDataConstant()) {
+  if (ai_exec.IsFastDataConstant()) {
     Handle<JSObject> holder;
     // Do not reduce if the exec method is not on the prototype chain.
     if (!ai_exec.holder().ToHandle(&holder)) return inference.NoChange();
@@ -7696,7 +7702,7 @@ Reduction JSCallReducer::ReduceRegExpPrototypeTest(Node* node) {
     JSObjectRef holder_ref(broker(), holder);
 
     // Bail out if the exec method is not the original one.
-    base::Optional<ObjectRef> constant = holder_ref.GetOwnDataProperty(
+    base::Optional<ObjectRef> constant = holder_ref.GetOwnFastDataProperty(
         ai_exec.field_representation(), ai_exec.field_index());
     if (!constant.has_value() ||
         !constant->equals(native_context().regexp_exec_function())) {
@@ -7708,6 +7714,7 @@ Reduction JSCallReducer::ReduceRegExpPrototypeTest(Node* node) {
         ai_exec.lookup_start_object_maps(), kStartAtPrototype,
         JSObjectRef(broker(), holder));
   } else {
+    // TODO(v8:11457) Support dictionary mode protoypes here.
     return inference.NoChange();
   }
 
