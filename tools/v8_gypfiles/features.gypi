@@ -74,7 +74,7 @@
     'v8_enable_future%': 0,
 
     # Sets -DSYSTEM_INSTRUMENTATION. Enables OS-dependent event tracing
-    'v8_enable_system_instrumentation%': 1,
+    'v8_enable_system_instrumentation%': 0,
 
     # Sets -DVERIFY_HEAP.
     'v8_enable_verify_heap%': 0,
