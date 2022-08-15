@@ -243,6 +243,7 @@ class QueryWrap final : public AsyncWrap {
   }
 
   void AresQuery(const char* name, int dnsclass, int type) {
+    // 确保 server 可用
     channel_->EnsureServers();
     TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(
       TRACING_CATEGORY_NODE2(dns, native), trace_name_, this,

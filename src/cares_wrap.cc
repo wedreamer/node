@@ -1409,12 +1409,18 @@ static void Query(const FunctionCallbackInfo<Value>& args) {
   CHECK(args[0]->IsObject());
   CHECK(args[1]->IsString());
 
+  // js 传入的 req
   Local<Object> req_wrap_obj = args[0].As<Object>();
+  // hostname string
   Local<String> string = args[1].As<String>();
+  // channel req 初始化 warp
   auto wrap = std::make_unique<Wrap>(channel, req_wrap_obj);
 
+  // 转换为 utf8
   node::Utf8Value name(env->isolate(), string);
+  // 改变激活数目
   channel->ModifyActivityQueryCount(1);
+  // 执行 send 函数
   int err = wrap->Send(*name);
   if (err) {
     channel->ModifyActivityQueryCount(-1);
