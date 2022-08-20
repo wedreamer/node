@@ -1,0 +1,10 @@
+{
+    "source_language": "EN",
+    "target_languages": [
+        "ZH"
+    ],
+    "interpolation": "default",
+    "input_path": "/home/shubuzuo/code/study/source-study/node/doc/api/report-cn.md",
+    "output_path": "$FILE",
+    "auth_key": "0994f68b-ee86-4c44-9b6a-d0dfcb501e14"
+}
