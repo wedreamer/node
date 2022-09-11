@@ -654,6 +654,7 @@ void AsyncWrap::EmitAsyncInit(Environment* env,
 }
 
 
+// 所有的回调函数都会经过这里
 MaybeLocal<Value> AsyncWrap::MakeCallback(const Local<Function> cb,
                                           int argc,
                                           Local<Value>* argv) {

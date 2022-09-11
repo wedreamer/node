@@ -833,6 +833,7 @@ int AnyTraits::Send(QueryWrap<AnyTraits>* wrap, const char* name) {
 }
 
 int ATraits::Send(QueryWrap<ATraits>* wrap, const char* name) {
+  // 发送请求
   wrap->AresQuery(name, ns_c_in, ns_t_a);
   return 0;
 }
@@ -1084,6 +1085,7 @@ int ATraits::Parse(
 
   Local<Array> ttls = AddrTTLToArray<ares_addrttl>(env, addrttls, naddrttls);
 
+  // 将回调函数注册到 complete 上
   wrap->CallOnComplete(ret, ttls);
   return 0;
 }
@@ -1409,17 +1411,22 @@ static void Query(const FunctionCallbackInfo<Value>& args) {
   CHECK(args[0]->IsObject());
   CHECK(args[1]->IsString());
 
+  // req
   Local<Object> req_wrap_obj = args[0].As<Object>();
+  // name
   Local<String> string = args[1].As<String>();
+  // init wrap
   auto wrap = std::make_unique<Wrap>(channel, req_wrap_obj);
 
   node::Utf8Value name(env->isolate(), string);
+  // 增加计数
   channel->ModifyActivityQueryCount(1);
   int err = wrap->Send(*name);
   if (err) {
     channel->ModifyActivityQueryCount(-1);
   } else {
     // Release ownership of the pointer allowing the ownership to be transferred
+    // 释放指针的所有权，允许所有权转移
     USE(wrap.release());
   }
 

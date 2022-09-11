@@ -278,6 +278,7 @@ class QueryWrap final : public AsyncWrap {
     if (status != ARES_SUCCESS)
       return ParseError(status);
 
+    // 检查返回的数据
     status = Traits::Parse(this, response_data_);
 
     if (status != ARES_SUCCESS)
@@ -311,16 +312,19 @@ class QueryWrap final : public AsyncWrap {
 
     unsigned char* buf_copy = nullptr;
     if (status == ARES_SUCCESS) {
+      // 成功拷贝申请空间, 拷贝数据
       buf_copy = node::Malloc<unsigned char>(answer_len);
       memcpy(buf_copy, answer_buf, answer_len);
     }
 
+    // 构建返回数据, 返回给回调的数据
     wrap->response_data_ = std::make_unique<ResponseData>();
     ResponseData* data = wrap->response_data_.get();
     data->status = status;
     data->is_host = false;
     data->buf = MallocedBuffer<unsigned char>(buf_copy, answer_len);
 
+    // 发送回调队列
     wrap->QueueResponseCallback(status);
   }
 
@@ -374,6 +378,8 @@ class QueryWrap final : public AsyncWrap {
     TRACE_EVENT_NESTABLE_ASYNC_END0(
         TRACING_CATEGORY_NODE2(dns, native), trace_name_, this);
 
+    // 构建回调函数
+    // env()->oncomplete_string() -> oncomplete
     MakeCallback(env()->oncomplete_string(), argc, argv);
   }
 
