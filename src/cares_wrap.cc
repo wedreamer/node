@@ -1697,18 +1697,24 @@ void GetServers(const FunctionCallbackInfo<Value>& args) {
 
 
 void SetServers(const FunctionCallbackInfo<Value>& args) {
+  // 根据参数获取当前的 env
   Environment* env = Environment::GetCurrent(args);
+  // 声明包装好的信道
   ChannelWrap* channel;
   ASSIGN_OR_RETURN_UNWRAP(&channel, args.Holder());
 
+  // 当前信道已经有活跃的请求
   if (channel->active_query_count()) {
     return args.GetReturnValue().Set(DNS_ESETSRVPENDING);
   }
 
+  // 保证参数第一个一定时数组
   CHECK(args[0]->IsArray());
 
+  // 转化成数组
   Local<Array> arr = args[0].As<Array>();
 
+  // 数组长度
   uint32_t len = arr->Length();
 
   if (len == 0) {
@@ -1716,12 +1722,14 @@ void SetServers(const FunctionCallbackInfo<Value>& args) {
     return args.GetReturnValue().Set(rv);
   }
 
+  // 声明等长的 向量 保存地址和端口信息
   std::vector<ares_addr_port_node> servers(len);
   ares_addr_port_node* last = nullptr;
 
   int err;
 
   for (uint32_t i = 0; i < len; i++) {
+    // 乱七八糟的相关检查
     CHECK(arr->Get(env->context(), i).ToLocalChecked()->IsArray());
 
     Local<Array> elm = arr->Get(env->context(), i).ToLocalChecked().As<Array>();
@@ -1742,19 +1750,23 @@ void SetServers(const FunctionCallbackInfo<Value>& args) {
     ares_addr_port_node* cur = &servers[i];
 
     cur->tcp_port = cur->udp_port = port;
+    // 根据 ip v4, v6 检查连通性
     switch (fam) {
       case 4:
         cur->family = AF_INET;
+        // libuv 工具函数, 同步检查 ip 是否能通 -> v4
         err = uv_inet_pton(AF_INET, *ip, &cur->addr);
         break;
       case 6:
         cur->family = AF_INET6;
+        // libuv 工具函数, 同步检查 ip 是否能通 -> v6
         err = uv_inet_pton(AF_INET6, *ip, &cur->addr);
         break;
       default:
         CHECK(0 && "Bad address family.");
     }
 
+    // 只要有一个失败就退出循环
     if (err)
       break;
 
@@ -1773,7 +1785,7 @@ void SetServers(const FunctionCallbackInfo<Value>& args) {
 
   if (err == ARES_SUCCESS)
     channel->set_is_servers_default(false);
-
+  // 返回错误值
   args.GetReturnValue().Set(err);
 }
 

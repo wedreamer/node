@@ -243,6 +243,7 @@ class QueryWrap final : public AsyncWrap {
   }
 
   void AresQuery(const char* name, int dnsclass, int type) {
+    // 确保
     channel_->EnsureServers();
     TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(
       TRACING_CATEGORY_NODE2(dns, native), trace_name_, this,
@@ -319,6 +320,7 @@ class QueryWrap final : public AsyncWrap {
 
     // 构建返回数据, 返回给回调的数据
     wrap->response_data_ = std::make_unique<ResponseData>();
+    // 
     ResponseData* data = wrap->response_data_.get();
     data->status = status;
     data->is_host = false;
